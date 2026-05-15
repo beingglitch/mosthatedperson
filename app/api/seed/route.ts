@@ -42,16 +42,29 @@ async function runSeed(refresh: boolean) {
   let wikiHits = 0;
   let wikiMisses = 0;
 
-  for (const f of SEED_FIGURES) {
-    // Try Wikipedia for a real photo; fall back to the bundled avatar.
-    let photo = f.photo_url;
-    const wiki = await fetchWikipediaImage(f.wiki);
-    if (wiki?.image) {
-      photo = wiki.image;
-      wikiHits++;
-    } else {
-      wikiMisses++;
+  // Fetch all Wikipedia images in parallel batches of 6, so 30 figures
+  // resolve in ~5 round-trips instead of serially (~30 round-trips).
+  const photos = new Map<string, string>();
+  const batchSize = 6;
+  for (let i = 0; i < SEED_FIGURES.length; i += batchSize) {
+    const batch = SEED_FIGURES.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map((f) =>
+        fetchWikipediaImage(f.wiki).then((r) => ({ slug: f.slug, image: r?.image })),
+      ),
+    );
+    for (const r of results) {
+      if (r.image) {
+        photos.set(r.slug, r.image);
+        wikiHits++;
+      } else {
+        wikiMisses++;
+      }
     }
+  }
+
+  for (const f of SEED_FIGURES) {
+    const photo = photos.get(f.slug) ?? f.photo_url;
 
     if (refresh) {
       const r = await sql<{ id: number; was_insert: boolean }[]>`

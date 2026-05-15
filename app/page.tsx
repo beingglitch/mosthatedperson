@@ -9,6 +9,7 @@ import { formatCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 20;
 
 function HeroStrip({ total }: { total: number }) {
   const items = [
