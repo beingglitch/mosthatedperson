@@ -53,6 +53,7 @@ export default async function HomePage({
 
   const dbMissing = !hasDb;
   const empty = !dbMissing && figures.length === 0;
+  const filtered = range !== "all";
 
   return (
     <>
@@ -97,7 +98,11 @@ export default async function HomePage({
           {dbMissing ? (
             <DbMissingNotice />
           ) : empty ? (
-            <EmptyNotice />
+            filtered ? (
+              <FilteredEmptyNotice range={range} />
+            ) : (
+              <EmptyNotice />
+            )
           ) : (
             <div className="grid gap-6 sm:gap-7 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
               {figures.map((f, i) => (
@@ -142,6 +147,28 @@ function EmptyNotice() {
         <code className="font-mono">/api/seed?secret=YOUR_SEED_SECRET</code> once to
         load the starter list of public figures.
       </p>
+    </div>
+  );
+}
+
+function FilteredEmptyNotice({ range }: { range: "today" | "week" }) {
+  const label = range === "today" ? "TODAY" : "THIS WEEK";
+  const window = range === "today" ? "the last 24 hours" : "the last 7 days";
+  return (
+    <div className="border-2 border-ink p-6 sm:p-8 bg-paper">
+      <div className="font-display text-3xl sm:text-4xl tracking-tightest leading-none">
+        NO HATE {label}
+      </div>
+      <p className="mt-3 text-mute">
+        Nobody has been hated in {window}. Cast the first reaction on any figure
+        and it'll show up here.
+      </p>
+      <a
+        href="/"
+        className="inline-block mt-5 bg-ink text-paper font-display tracking-wide px-4 py-2 hover:bg-blood transition-colors"
+      >
+        ← SEE ALL TIME
+      </a>
     </div>
   );
 }

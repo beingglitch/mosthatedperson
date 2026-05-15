@@ -41,28 +41,26 @@ export async function getLeaderboard(
   if (!hasDb || !sql) return [];
   const clause = rangeClause(range);
   const q = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
+  // For "today"/"week" we hide figures with no votes in the window — that's
+  // what makes the filter feel real instead of showing all 30 with 0 each.
+  const joinKind = range === "all" ? "LEFT" : "INNER";
   try {
     const rows = await sql.unsafe<FigureWithCount[]>(
       `
     SELECT
       f.id, f.slug, f.name, f.photo_url, f.description, f.category,
-      COALESCE(c.hate_count, 0)::int AS hate_count,
-      t.top_reaction
+      COALESCE(s.hate_count, 0)::int AS hate_count,
+      s.top_reaction
     FROM figures f
-    LEFT JOIN (
-      SELECT v.figure_id, count(*)::int AS hate_count
+    ${joinKind} JOIN (
+      SELECT
+        v.figure_id,
+        count(*)::int AS hate_count,
+        mode() WITHIN GROUP (ORDER BY v.reaction) AS top_reaction
       FROM votes v
       WHERE ${clause}
       GROUP BY v.figure_id
-    ) c ON c.figure_id = f.id
-    LEFT JOIN LATERAL (
-      SELECT v.reaction AS top_reaction
-      FROM votes v
-      WHERE v.figure_id = f.id
-      GROUP BY v.reaction
-      ORDER BY count(*) DESC
-      LIMIT 1
-    ) t ON true
+    ) s ON s.figure_id = f.id
     ${q ? "WHERE lower(f.name) LIKE $1" : ""}
     ORDER BY hate_count DESC, f.name ASC
     LIMIT ${limit}
