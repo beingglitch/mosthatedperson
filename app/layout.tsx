@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { siteUrl } from "@/lib/format";
 import { TrackVisit } from "@/components/TrackVisit";
@@ -85,6 +87,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans min-h-screen flex flex-col">
         {children}
         <TrackVisit />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
