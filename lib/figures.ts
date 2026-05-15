@@ -187,6 +187,26 @@ export async function getTotalHate(): Promise<number> {
   }
 }
 
+async function safeScalar<T = number>(
+  label: string,
+  run: () => Promise<{ c: T }[]>,
+  fallback: T,
+  timeoutMs = 3500,
+): Promise<T> {
+  try {
+    const result = await Promise.race([
+      run(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("query timeout")), timeoutMs),
+      ),
+    ]);
+    return result[0]?.c ?? fallback;
+  } catch (e) {
+    logDbError(`stats:${label}`, e);
+    return fallback;
+  }
+}
+
 export async function getSiteStats(): Promise<{
   totalFigures: number;
   totalHate: number;
@@ -200,26 +220,57 @@ export async function getSiteStats(): Promise<{
     totalVisitors: 0,
   };
   if (!hasDb || !sql) return empty;
+  const s = sql;
+  // Single round-trip combining all counters. to_regclass() returns NULL if a
+  // table doesn't exist, so missing `visits` (pre-seed) won't error the query.
   try {
-    const [figs, votes, today, visitors] = await Promise.all([
-      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM figures`,
-      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM votes`,
-      sql<{ c: number }[]>`
-        SELECT count(*)::int AS c FROM votes
-        WHERE created_at > now() - interval '1 day'
+    const rows = await Promise.race([
+      s<
+        {
+          total_figures: number;
+          total_hate: number;
+          hated_today: number;
+          total_visitors: number;
+        }[]
+      >`
+        SELECT
+          (SELECT count(*)::int FROM figures) AS total_figures,
+          (SELECT count(*)::int FROM votes)   AS total_hate,
+          (SELECT count(*)::int FROM votes WHERE created_at > now() - interval '1 day') AS hated_today,
+          (
+            CASE WHEN to_regclass('public.visits') IS NULL
+                 THEN 0
+                 ELSE (SELECT count(*)::int FROM visits)
+            END
+          )::int AS total_visitors
       `,
-      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM visits`.catch(
-        () => [{ c: 0 }] as { c: number }[],
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("stats timeout")), 4000),
       ),
     ]);
+    const r = rows[0];
     return {
-      totalFigures: figs[0]?.c ?? 0,
-      totalHate: votes[0]?.c ?? 0,
-      hatedToday: today[0]?.c ?? 0,
-      totalVisitors: visitors[0]?.c ?? 0,
+      totalFigures: r?.total_figures ?? 0,
+      totalHate: r?.total_hate ?? 0,
+      hatedToday: r?.hated_today ?? 0,
+      totalVisitors: r?.total_visitors ?? 0,
     };
   } catch (e) {
     logDbError("getSiteStats", e);
-    return empty;
+    // Fall back to per-counter probes so the page still loads with some numbers.
+    return {
+      totalFigures: await safeScalar(
+        "figures",
+        () => s<{ c: number }[]>`SELECT count(*)::int AS c FROM figures`,
+        0,
+      ),
+      totalHate: await safeScalar(
+        "votes",
+        () => s<{ c: number }[]>`SELECT count(*)::int AS c FROM votes`,
+        0,
+      ),
+      hatedToday: 0,
+      totalVisitors: 0,
+    };
   }
 }
