@@ -1,11 +1,14 @@
+import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { TimeFilter } from "@/components/TimeFilter";
 import { FigureCard } from "@/components/FigureCard";
-import { getLeaderboard, getTotalHate } from "@/lib/figures";
+import { JsonLd } from "@/components/JsonLd";
+import { StatsBar } from "@/components/StatsBar";
+import { getLeaderboard, getSiteStats } from "@/lib/figures";
 import { hasDb } from "@/lib/db";
 import { Suspense } from "react";
-import { formatCount } from "@/lib/format";
+import { formatCount, siteUrl } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,18 +49,59 @@ export default async function HomePage({
     | "week"
     | "all";
 
-  const [figures, total] = await Promise.all([
+  const [figures, stats] = await Promise.all([
     getLeaderboard(range, q, 60),
-    getTotalHate(),
+    getSiteStats(),
   ]);
+  const total = stats.totalHate;
 
   const dbMissing = !hasDb;
   const empty = !dbMissing && figures.length === 0;
   const filtered = range !== "all";
 
+  const base = siteUrl();
+  const websiteLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Most Hated",
+    alternateName: "MostHated",
+    url: base,
+    description:
+      "The people's leaderboard of the most hated public figures in the world.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${base}/?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  };
+  const itemListLd = figures.length
+    ? {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        name: "Most Hated public figures",
+        numberOfItems: figures.length,
+        itemListOrder: "https://schema.org/ItemListOrderDescending",
+        itemListElement: figures.slice(0, 20).map((f, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          url: `${base}/p/${f.slug}`,
+          name: f.name,
+          image: f.photo_url,
+        })),
+      }
+    : null;
+
   return (
     <>
+      <JsonLd data={websiteLd} />
+      {itemListLd ? <JsonLd data={itemListLd} /> : null}
       <Header />
+      <StatsBar
+        totalFigures={stats.totalFigures}
+        totalHate={stats.totalHate}
+        hatedToday={stats.hatedToday}
+        totalVisitors={stats.totalVisitors}
+      />
       <HeroStrip total={total} />
 
       <main className="flex-1">
@@ -111,6 +155,11 @@ export default async function HomePage({
             </div>
           )}
         </section>
+
+        {/* SEO-rich body content + internal links */}
+        {figures.length > 0 ? (
+          <SeoFooterContent figures={figures.slice(0, 12)} />
+        ) : null}
       </main>
       <Footer />
     </>
@@ -148,6 +197,76 @@ function EmptyNotice() {
         load the starter list of public figures.
       </p>
     </div>
+  );
+}
+
+function SeoFooterContent({
+  figures,
+}: {
+  figures: { slug: string; name: string }[];
+}) {
+  return (
+    <section className="border-t-2 border-ink bg-paper">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 grid lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2">
+          <h2 className="font-display tracking-tightest text-3xl sm:text-5xl leading-[0.95]">
+            WHO IS THE MOST HATED PERSON IN THE WORLD?
+          </h2>
+          <div className="mt-5 space-y-4 text-base sm:text-lg leading-relaxed max-w-prose">
+            <p>
+              Every era has its villains — and the internet decides them in real time.
+              <strong> Most Hated</strong> is a live, public leaderboard ranking the
+              world's most disliked public figures across politics, tech, business,
+              entertainment and sport. Each visitor casts <em>one</em> reaction per
+              person — angry, clown, disgust, cringe, or overrated — and the
+              leaderboard shifts as votes come in.
+            </p>
+            <p>
+              We list <strong>only public figures with documented public criticism</strong>:
+              heads of state, billionaire CEOs, household-name celebrities and influencers
+              who already attract significant media scrutiny. No private individuals.
+              No user-submitted names. No comments, no doxxing, no harassment.
+            </p>
+            <p>
+              Filter by <Link href="/?range=today" className="linkish font-semibold">
+              today</Link>, <Link href="/?range=week" className="linkish font-semibold">
+              this week</Link>, or all-time to see which figure the internet is most
+              fed up with right now. Click any photo to open that person's page and
+              cast a reaction — your vote is permanent, anonymous, and counts toward
+              their position on the global hate leaderboard.
+            </p>
+          </div>
+        </div>
+
+        <aside>
+          <h3 className="font-display tracking-tightest text-xl uppercase">
+            Most hated right now
+          </h3>
+          <ul className="mt-3 space-y-1">
+            {figures.map((f) => (
+              <li key={f.slug}>
+                <Link
+                  href={`/p/${f.slug}`}
+                  className="linkish font-mono text-sm uppercase tracking-widest"
+                >
+                  {f.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <h3 className="mt-8 font-display tracking-tightest text-xl uppercase">
+            Categories
+          </h3>
+          <ul className="mt-3 space-y-1 text-sm font-mono uppercase tracking-widest text-mute">
+            <li>Politicians & World Leaders</li>
+            <li>Tech & Business CEOs</li>
+            <li>Celebrities & Entertainers</li>
+            <li>Influencers</li>
+            <li>Athletes</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
   );
 }
 

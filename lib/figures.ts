@@ -153,6 +153,29 @@ export async function getAllSlugs(): Promise<{ slug: string; updated_at: Date }[
   }
 }
 
+export async function getRelatedFigures(
+  excludeSlug: string,
+  limit = 6,
+): Promise<FigureWithCount[]> {
+  if (!hasDb || !sql) return [];
+  try {
+    const rows = await sql<FigureWithCount[]>`
+      SELECT
+        f.id, f.slug, f.name, f.photo_url, f.description, f.category,
+        COALESCE((SELECT count(*)::int FROM votes v WHERE v.figure_id = f.id), 0) AS hate_count,
+        NULL::text AS top_reaction
+      FROM figures f
+      WHERE f.slug <> ${excludeSlug}
+      ORDER BY random()
+      LIMIT ${limit}
+    `;
+    return rows;
+  } catch (e) {
+    logDbError("getRelatedFigures", e);
+    return [];
+  }
+}
+
 export async function getTotalHate(): Promise<number> {
   if (!hasDb || !sql) return 0;
   try {
@@ -161,5 +184,42 @@ export async function getTotalHate(): Promise<number> {
   } catch (e) {
     logDbError("getTotalHate", e);
     return 0;
+  }
+}
+
+export async function getSiteStats(): Promise<{
+  totalFigures: number;
+  totalHate: number;
+  hatedToday: number;
+  totalVisitors: number;
+}> {
+  const empty = {
+    totalFigures: 0,
+    totalHate: 0,
+    hatedToday: 0,
+    totalVisitors: 0,
+  };
+  if (!hasDb || !sql) return empty;
+  try {
+    const [figs, votes, today, visitors] = await Promise.all([
+      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM figures`,
+      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM votes`,
+      sql<{ c: number }[]>`
+        SELECT count(*)::int AS c FROM votes
+        WHERE created_at > now() - interval '1 day'
+      `,
+      sql<{ c: number }[]>`SELECT count(*)::int AS c FROM visits`.catch(
+        () => [{ c: 0 }] as { c: number }[],
+      ),
+    ]);
+    return {
+      totalFigures: figs[0]?.c ?? 0,
+      totalHate: votes[0]?.c ?? 0,
+      hatedToday: today[0]?.c ?? 0,
+      totalVisitors: visitors[0]?.c ?? 0,
+    };
+  } catch (e) {
+    logDbError("getSiteStats", e);
+    return empty;
   }
 }

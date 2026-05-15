@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS votes (
 CREATE INDEX IF NOT EXISTS idx_votes_figure   ON votes(figure_id);
 CREATE INDEX IF NOT EXISTS idx_votes_created  ON votes(created_at);
 CREATE INDEX IF NOT EXISTS idx_votes_visitor  ON votes(visitor_id);
+
+CREATE TABLE IF NOT EXISTS visits (
+  visitor_id  TEXT PRIMARY KEY,
+  first_seen  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_visits_first   ON visits(first_seen);
 `;
 
 async function runSeed(refresh: boolean) {

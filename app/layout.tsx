@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Anton, Inter } from "next/font/google";
 import "./globals.css";
 import { siteUrl } from "@/lib/format";
+import { TrackVisit } from "@/components/TrackVisit";
 
 const display = Anton({
   subsets: ["latin"],
@@ -19,25 +20,57 @@ const sans = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: {
-    default: "Most Hated — Vote on the world's most hated public figures",
+    default:
+      "Most Hated — Vote on the world's most hated public figures, politicians, celebrities & CEOs",
     template: "%s — Most Hated",
   },
   description:
-    "A people's leaderboard of the most hated public figures in the world. Pick your reaction. One vote per person. No comments, no drama — just receipts.",
+    "The people's leaderboard of the most hated public figures in the world — politicians, billionaires, celebrities and influencers. Pick a reaction. One vote per visitor. No comments, no doxxing. Updated live.",
   applicationName: "Most Hated",
+  keywords: [
+    "most hated person",
+    "most hated people",
+    "most hated public figures",
+    "most hated celebrities",
+    "most hated politicians",
+    "most hated CEO",
+    "most hated person in the world",
+    "vote leaderboard",
+    "people's leaderboard",
+  ],
+  authors: [{ name: "Most Hated" }],
+  creator: "Most Hated",
+  publisher: "Most Hated",
+  alternates: { canonical: "/" },
+  category: "society",
   openGraph: {
     type: "website",
     siteName: "Most Hated",
-    title: "Most Hated — Vote on the world's most hated public figures",
+    locale: "en_US",
+    url: "/",
+    title:
+      "Most Hated — Vote on the world's most hated public figures",
     description:
-      "A people's leaderboard of the most hated public figures. One reaction per person.",
+      "The people's leaderboard of the most hated public figures in the world. One reaction per visitor. Updated live.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Most Hated",
-    description: "Vote on the world's most hated public figures.",
+    title: "Most Hated — The people's leaderboard",
+    description:
+      "Vote on the world's most hated public figures. One reaction per visitor.",
   },
-  robots: { index: true, follow: true },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  formatDetection: { telephone: false, address: false, email: false },
 };
 
 export const viewport: Viewport = {
@@ -49,7 +82,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="font-sans min-h-screen flex flex-col">{children}</body>
+      <body className="font-sans min-h-screen flex flex-col">
+        {children}
+        <TrackVisit />
+      </body>
     </html>
   );
 }

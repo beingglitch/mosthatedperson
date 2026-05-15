@@ -6,7 +6,9 @@ import {
   getFigureBySlug,
   getReactionBreakdown,
   getVisitorVote,
+  getRelatedFigures,
 } from "@/lib/figures";
+import { JsonLd } from "@/components/JsonLd";
 import { getOrCreateVisitorId } from "@/lib/visitor";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -28,24 +30,38 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const f = await getFigureBySlug(slug);
-  if (!f) return { title: "Not found" };
+  if (!f) return { title: "Not found", robots: { index: false, follow: false } };
   const url = `${siteUrl()}/p/${f.slug}`;
   const title = `${f.name} — ${formatCount(f.hate_count)} hate votes`;
   const description =
-    f.description ||
-    `Vote and see how ${f.name} ranks on the people's hate leaderboard.`;
+    `Vote and see how ${f.name} ranks on the world's most-hated leaderboard. ` +
+    (f.description ?? "") +
+    " One reaction per visitor.";
   return {
     title,
-    description,
+    description: description.trim(),
     alternates: { canonical: url },
+    keywords: [
+      `most hated ${f.name}`,
+      `${f.name} hate`,
+      `${f.name} vote`,
+      `${f.name} ranking`,
+      "most hated person",
+      "most hated public figure",
+    ],
     openGraph: {
       type: "profile",
       url,
       title,
-      description,
+      description: description.trim(),
       siteName: "Most Hated",
     },
-    twitter: { card: "summary_large_image", title, description },
+    twitter: { card: "summary_large_image", title, description: description.trim() },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-image-preview": "large" },
+    },
   };
 }
 
@@ -61,21 +77,32 @@ export default async function PersonPage({
   const { visitorId } = await getOrCreateVisitorId().catch(() => ({
     visitorId: "",
   }));
-  const [breakdown, existing] = await Promise.all([
+  const [breakdown, existing, related] = await Promise.all([
     getReactionBreakdown(f.id),
     visitorId ? getVisitorVote(f.id, visitorId) : Promise.resolve(null),
+    getRelatedFigures(f.slug, 6),
   ]);
 
-  const url = `${siteUrl()}/p/${f.slug}`;
+  const base = siteUrl();
+  const url = `${base}/p/${f.slug}`;
   const shareText = `${f.name} has ${formatCount(f.hate_count)} hate votes. Cast yours →`;
 
-  const jsonLd = {
+  const personLd = {
     "@context": "https://schema.org",
     "@type": "Person",
     name: f.name,
     image: f.photo_url,
     url,
     description: f.description ?? undefined,
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+  };
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Most Hated", item: base },
+      { "@type": "ListItem", position: 2, name: f.name, item: url },
+    ],
   };
 
   return (
@@ -152,20 +179,55 @@ export default async function PersonPage({
           </div>
         </article>
 
+        {related.length > 0 ? (
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 mt-16">
+            <div className="rule" />
+            <h2 className="mt-6 font-display tracking-tightest text-3xl sm:text-4xl">
+              MORE HATED FIGURES
+            </h2>
+            <p className="mt-1 text-mute text-sm">
+              Cast a reaction on someone else.
+            </p>
+            <ul className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+              {related.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`/p/${r.slug}`}
+                    className="block border-2 border-ink card-hover bg-paper"
+                  >
+                    <div className="relative aspect-square bg-line overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={r.photo_url}
+                        alt={r.name}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="px-2 py-2 font-display text-sm leading-[1.05] tracking-tightest">
+                      {r.name.toUpperCase()}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section className="max-w-6xl mx-auto px-4 sm:px-6 mt-16 mb-16">
           <div className="rule" />
-          <div className="mt-4 text-xs font-mono uppercase tracking-widest text-mute flex justify-between">
-            <span>Public figure · documented public criticism</span>
+          <div className="mt-4 text-xs font-mono uppercase tracking-widest text-mute flex flex-col sm:flex-row gap-2 sm:justify-between">
+            <span>
+              Public figure · documented public criticism · {f.category ?? "unrated"}
+            </span>
             <Link href="/about#takedown" className="linkish">
               corrections / takedown
             </Link>
           </div>
         </section>
 
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd data={personLd} />
+        <JsonLd data={breadcrumbLd} />
       </main>
       <Footer />
     </>

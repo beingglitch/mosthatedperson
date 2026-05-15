@@ -1,16 +1,55 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { JsonLd } from "@/components/JsonLd";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About — how voting works",
+  title: "About — how voting works on Most Hated",
   description:
-    "How the Most Hated leaderboard works, what we list, and how to request a correction or takedown.",
+    "How the Most Hated leaderboard works, who we list, how voting works, and how to request a correction or takedown.",
 };
 
+const FAQ = [
+  {
+    q: "What is Most Hated?",
+    a: "Most Hated is a curated, real-time leaderboard ranking the world's most-disliked public figures across politics, tech, business, entertainment and sport. Visitors cast one reaction per person — angry, clown, disgust, cringe, or overrated — and the leaderboard updates live.",
+  },
+  {
+    q: "Who is on the list?",
+    a: "Only public figures with documented public criticism — heads of state, billionaire CEOs, household-name celebrities and influencers. We do not list private individuals. The list is curated; users cannot add names.",
+  },
+  {
+    q: "How does voting work?",
+    a: "Pick one of five reactions on any figure. Each reaction counts as +1 hate. You can only react once per figure, ever, from a given device. Identity is a hashed cookie + IP pair — anonymous, not tied to any account.",
+  },
+  {
+    q: "Can I change or remove my reaction?",
+    a: "No. Reactions are permanent so totals can't be gamed by toggling.",
+  },
+  {
+    q: "What if someone is wrongly listed?",
+    a: "Email hello@mosthated.example. We respond to genuine takedown and correction requests promptly.",
+  },
+  {
+    q: "How is the leaderboard ranked?",
+    a: "By total hate count for the selected time window — Today (24h), This Week (7d), or All Time. Ties break alphabetically.",
+  },
+];
+
 export default function AboutPage() {
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+
   return (
     <>
+      <JsonLd data={faqLd} />
       <Header />
       <main className="flex-1 max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         <h1 className="font-display tracking-tightest leading-[0.9] text-[clamp(40px,9vw,96px)]">
@@ -65,6 +104,22 @@ export default function AboutPage() {
             </a>
             . We respond to genuine takedown requests promptly.
           </p>
+        </section>
+
+        <section id="faq" className="mt-14">
+          <h2 className="font-display tracking-tightest text-3xl sm:text-4xl">
+            FREQUENTLY ASKED
+          </h2>
+          <ul className="mt-5 space-y-5">
+            {FAQ.map((item, i) => (
+              <li key={i} className="border-l-2 border-ink pl-4">
+                <h3 className="font-display tracking-tightest text-xl sm:text-2xl">
+                  {item.q}
+                </h3>
+                <p className="mt-1 text-base text-mute leading-relaxed">{item.a}</p>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section className="mt-12 border-2 border-ink p-4 sm:p-5 bg-paper">
