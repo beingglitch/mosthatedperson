@@ -19,13 +19,25 @@ gh repo create mosthated --public --source=. --remote=origin --push
 
 ## 3. Provision Postgres
 
-In the Vercel dashboard:
+### Option A — Supabase (recommended for free tier)
 
-1. **Storage → Create Database → Postgres** (Vercel Postgres / Neon — either works).
-2. Connect it to your project. Vercel auto-injects `DATABASE_URL` (and a few aliases).
-3. Redeploy from the **Deployments** tab so the new env vars take effect.
+1. Go to [supabase.com](https://supabase.com) → create a project.
+2. **Project → Settings → Database → Connection string → URI**.
+3. Pick the **Transaction pooler** entry (port `6543`). Reveal and copy the URL.
+4. In Vercel: **Settings → Environment Variables → Add** `DATABASE_URL` = that URL.
 
-If you prefer your own Postgres (Supabase / Railway / Render / RDS), set `DATABASE_URL` manually in **Settings → Environment Variables**. The format is `postgres://user:pass@host:5432/dbname?sslmode=require`.
+The code already sets `prepare: false` on the postgres.js client, which Supabase's pooler requires.
+
+### Option B — Vercel Postgres / Neon
+
+1. Vercel dashboard → **Storage → Create Database → Postgres**.
+2. Connect to your project — Vercel auto-injects `DATABASE_URL`.
+
+### Option C — anything else
+
+Set `DATABASE_URL` manually. Format: `postgres://user:pass@host:5432/dbname?sslmode=require`.
+
+After adding, redeploy from the **Deployments** tab so the new env vars take effect.
 
 ## 4. Add the other env vars
 
@@ -47,7 +59,19 @@ Hit this URL once:
 https://<your-domain>/api/seed?secret=<your SEED_SECRET>
 ```
 
-Response will be JSON like `{"ok":true,"inserted":30,"total":30}`. The homepage now shows the leaderboard.
+It creates the tables, fetches each figure's photo from Wikipedia, and loads the 30-person starter list. Response is JSON like:
+
+```json
+{ "ok": true, "inserted": 30, "wiki_hits": 28, "wiki_misses": 2, "total": 30 }
+```
+
+`wiki_misses` means a couple of Wikipedia lookups failed (network blip, redirect, etc.) — those figures get the DiceBear avatar fallback. Re-running the seed will retry them.
+
+**To refresh existing rows** (e.g. you edited `lib/seed-data.ts` and want the changes to overwrite already-seeded figures): add `&refresh=1`:
+
+```
+https://<your-domain>/api/seed?secret=<...>&refresh=1
+```
 
 ## 6. Verify
 

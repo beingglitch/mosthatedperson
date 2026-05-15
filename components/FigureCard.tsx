@@ -53,7 +53,7 @@ export function FigureCard({
           <div className="min-w-0">
             <Link
               href={`/p/${figure.slug}`}
-              className="block font-display text-2xl sm:text-3xl leading-[0.95] tracking-tightest truncate hover:text-blood"
+              className="block font-display text-xl sm:text-2xl leading-[1.02] tracking-tightest hover:text-blood break-words"
             >
               {figure.name.toUpperCase()}
             </Link>

@@ -112,13 +112,8 @@ export default async function PersonPage({
 
             {/* Content */}
             <div className="flex flex-col">
-              <h1 className="font-display tracking-tightest leading-[0.85] text-[clamp(48px,9vw,128px)]">
-                {f.name.split(" ").map((part, i, arr) => (
-                  <span key={i}>
-                    {part}
-                    {i < arr.length - 1 ? <br /> : null}
-                  </span>
-                ))}
+              <h1 className="font-display tracking-tightest leading-[0.9] text-[clamp(40px,7vw,96px)] break-words">
+                {f.name.toUpperCase()}
               </h1>
               {f.description ? (
                 <p className="mt-4 text-base sm:text-lg text-mute max-w-prose">

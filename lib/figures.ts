@@ -29,6 +29,10 @@ function rangeClause(range: TimeRange) {
   }
 }
 
+function logDbError(where: string, e: unknown) {
+  console.error(`[db:${where}]`, (e as Error)?.message ?? e);
+}
+
 export async function getLeaderboard(
   range: TimeRange = "all",
   search?: string,
@@ -37,9 +41,9 @@ export async function getLeaderboard(
   if (!hasDb || !sql) return [];
   const clause = rangeClause(range);
   const q = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
-
-  const rows = await sql.unsafe<FigureWithCount[]>(
-    `
+  try {
+    const rows = await sql.unsafe<FigureWithCount[]>(
+      `
     SELECT
       f.id, f.slug, f.name, f.photo_url, f.description, f.category,
       COALESCE(c.hate_count, 0)::int AS hate_count,
@@ -63,26 +67,35 @@ export async function getLeaderboard(
     ORDER BY hate_count DESC, f.name ASC
     LIMIT ${limit}
     `,
-    q ? [q] : [],
-  );
-  return rows;
+      q ? [q] : [],
+    );
+    return rows;
+  } catch (e) {
+    logDbError("getLeaderboard", e);
+    return [];
+  }
 }
 
 export async function getFigureBySlug(slug: string): Promise<FigureWithCount | null> {
   if (!hasDb || !sql) return null;
-  const rows = await sql<FigureWithCount[]>`
-    SELECT
-      f.id, f.slug, f.name, f.photo_url, f.description, f.category,
-      COALESCE((SELECT count(*)::int FROM votes v WHERE v.figure_id = f.id), 0) AS hate_count,
-      (
-        SELECT v.reaction FROM votes v WHERE v.figure_id = f.id
-        GROUP BY v.reaction ORDER BY count(*) DESC LIMIT 1
-      ) AS top_reaction
-    FROM figures f
-    WHERE f.slug = ${slug}
-    LIMIT 1
-  `;
-  return rows[0] ?? null;
+  try {
+    const rows = await sql<FigureWithCount[]>`
+      SELECT
+        f.id, f.slug, f.name, f.photo_url, f.description, f.category,
+        COALESCE((SELECT count(*)::int FROM votes v WHERE v.figure_id = f.id), 0) AS hate_count,
+        (
+          SELECT v.reaction FROM votes v WHERE v.figure_id = f.id
+          GROUP BY v.reaction ORDER BY count(*) DESC LIMIT 1
+        ) AS top_reaction
+      FROM figures f
+      WHERE f.slug = ${slug}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  } catch (e) {
+    logDbError("getFigureBySlug", e);
+    return null;
+  }
 }
 
 export async function getReactionBreakdown(
@@ -93,15 +106,20 @@ export async function getReactionBreakdown(
     number
   >;
   if (!hasDb || !sql) return empty;
-  const rows = await sql<{ reaction: ReactionKey; cnt: number }[]>`
-    SELECT reaction, count(*)::int AS cnt
-    FROM votes
-    WHERE figure_id = ${figureId}
-    GROUP BY reaction
-  `;
-  const out = { ...empty };
-  for (const r of rows) out[r.reaction] = r.cnt;
-  return out;
+  try {
+    const rows = await sql<{ reaction: ReactionKey; cnt: number }[]>`
+      SELECT reaction, count(*)::int AS cnt
+      FROM votes
+      WHERE figure_id = ${figureId}
+      GROUP BY reaction
+    `;
+    const out = { ...empty };
+    for (const r of rows) out[r.reaction] = r.cnt;
+    return out;
+  } catch (e) {
+    logDbError("getReactionBreakdown", e);
+    return empty;
+  }
 }
 
 export async function getVisitorVote(
@@ -109,26 +127,41 @@ export async function getVisitorVote(
   visitorId: string,
 ): Promise<ReactionKey | null> {
   if (!hasDb || !sql) return null;
-  const rows = await sql<{ reaction: ReactionKey }[]>`
-    SELECT reaction FROM votes
-    WHERE figure_id = ${figureId} AND visitor_id = ${visitorId}
-    LIMIT 1
-  `;
-  return rows[0]?.reaction ?? null;
+  try {
+    const rows = await sql<{ reaction: ReactionKey }[]>`
+      SELECT reaction FROM votes
+      WHERE figure_id = ${figureId} AND visitor_id = ${visitorId}
+      LIMIT 1
+    `;
+    return rows[0]?.reaction ?? null;
+  } catch (e) {
+    logDbError("getVisitorVote", e);
+    return null;
+  }
 }
 
 export async function getAllSlugs(): Promise<{ slug: string; updated_at: Date }[]> {
   if (!hasDb || !sql) return [];
-  const rows = await sql<{ slug: string; updated_at: Date }[]>`
-    SELECT f.slug, COALESCE(max(v.created_at), f.created_at) AS updated_at
-    FROM figures f LEFT JOIN votes v ON v.figure_id = f.id
-    GROUP BY f.id
-  `;
-  return rows;
+  try {
+    const rows = await sql<{ slug: string; updated_at: Date }[]>`
+      SELECT f.slug, COALESCE(max(v.created_at), f.created_at) AS updated_at
+      FROM figures f LEFT JOIN votes v ON v.figure_id = f.id
+      GROUP BY f.id
+    `;
+    return rows;
+  } catch (e) {
+    logDbError("getAllSlugs", e);
+    return [];
+  }
 }
 
 export async function getTotalHate(): Promise<number> {
   if (!hasDb || !sql) return 0;
-  const rows = await sql<{ c: number }[]>`SELECT count(*)::int AS c FROM votes`;
-  return rows[0]?.c ?? 0;
+  try {
+    const rows = await sql<{ c: number }[]>`SELECT count(*)::int AS c FROM votes`;
+    return rows[0]?.c ?? 0;
+  } catch (e) {
+    logDbError("getTotalHate", e);
+    return 0;
+  }
 }

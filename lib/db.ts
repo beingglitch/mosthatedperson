@@ -14,9 +14,10 @@ function build() {
   if (!url) return null;
   return postgres(url, {
     ssl: "require",
-    prepare: false,
+    prepare: false,        // required for Supabase / pgbouncer transaction pooling
     idle_timeout: 20,
     max: 1,
+    connect_timeout: 8,    // fail fast — better than hanging the page
   });
 }
 

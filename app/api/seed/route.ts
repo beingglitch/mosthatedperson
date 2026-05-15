@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { sql, hasDb } from "@/lib/db";
 import { SEED_FIGURES } from "@/lib/seed-data";
+import { fetchWikipediaImage } from "@/lib/wikipedia";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS figures (
@@ -30,25 +32,59 @@ CREATE INDEX IF NOT EXISTS idx_votes_created  ON votes(created_at);
 CREATE INDEX IF NOT EXISTS idx_votes_visitor  ON votes(visitor_id);
 `;
 
-async function runSeed() {
+async function runSeed(refresh: boolean) {
   if (!sql) throw new Error("no db");
 
-  // Run schema via unsafe (multi-statement)
   await sql.unsafe(SCHEMA_SQL);
 
   let inserted = 0;
+  let updated = 0;
+  let wikiHits = 0;
+  let wikiMisses = 0;
+
   for (const f of SEED_FIGURES) {
-    const r = await sql<{ id: number }[]>`
-      INSERT INTO figures (slug, name, photo_url, description, category)
-      VALUES (${f.slug}, ${f.name}, ${f.photo_url}, ${f.description}, ${f.category})
-      ON CONFLICT (slug) DO NOTHING
-      RETURNING id
-    `;
-    if (r.length > 0) inserted++;
+    // Try Wikipedia for a real photo; fall back to the bundled avatar.
+    let photo = f.photo_url;
+    const wiki = await fetchWikipediaImage(f.wiki);
+    if (wiki?.image) {
+      photo = wiki.image;
+      wikiHits++;
+    } else {
+      wikiMisses++;
+    }
+
+    if (refresh) {
+      const r = await sql<{ id: number; was_insert: boolean }[]>`
+        INSERT INTO figures (slug, name, photo_url, description, category)
+        VALUES (${f.slug}, ${f.name}, ${photo}, ${f.description}, ${f.category})
+        ON CONFLICT (slug) DO UPDATE SET
+          name = EXCLUDED.name,
+          photo_url = EXCLUDED.photo_url,
+          description = EXCLUDED.description,
+          category = EXCLUDED.category
+        RETURNING id, (xmax = 0) AS was_insert
+      `;
+      if (r[0]?.was_insert) inserted++;
+      else updated++;
+    } else {
+      const r = await sql<{ id: number }[]>`
+        INSERT INTO figures (slug, name, photo_url, description, category)
+        VALUES (${f.slug}, ${f.name}, ${photo}, ${f.description}, ${f.category})
+        ON CONFLICT (slug) DO NOTHING
+        RETURNING id
+      `;
+      if (r.length > 0) inserted++;
+    }
   }
 
   const total = await sql<{ c: number }[]>`SELECT count(*)::int AS c FROM figures`;
-  return { inserted, total: total[0]?.c ?? 0 };
+  return {
+    inserted,
+    updated,
+    wiki_hits: wikiHits,
+    wiki_misses: wikiMisses,
+    total: total[0]?.c ?? 0,
+  };
 }
 
 function authorized(req: Request) {
@@ -69,9 +105,11 @@ export async function GET(req: Request) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const url = new URL(req.url);
+  const refresh = url.searchParams.get("refresh") === "1";
   try {
-    const result = await runSeed();
-    return NextResponse.json({ ok: true, ...result });
+    const result = await runSeed(refresh);
+    return NextResponse.json({ ok: true, refresh, ...result });
   } catch (e) {
     return NextResponse.json(
       { error: "seed failed", detail: (e as Error).message },
